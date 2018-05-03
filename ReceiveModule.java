@@ -47,7 +47,7 @@ public class ReceiveModule {
         } else if (event.getType().equals("RM_VACATE")) {
             return processRMVacateEvent(event);
         } else {
-            logger.log(Level.WARNING, "Event wrongly sent to RM module discarding. " + event);
+            logger.log(Level.WARNING, "Receive Module: Discarding the wrongly sent Event. " + event);
             return null;
         }
     }
@@ -55,11 +55,11 @@ public class ReceiveModule {
     private Event processRMRecEvent(Event event) {
         totalFramesProcessed++;
         Event eventAfterRMProcessing = null;
-        logger.log(Level.INFO, "Frame from MM is being PROCCESED in RM. " + event); 
+        logger.log(Level.INFO, "Receive Module: processing the Frame from MM. " + event); 
         if (rpp.isBusy()) {
             if (recBuffer.size() >= maxFramesInRB) {
                 droppedFrames++;
-                logger.log(Level.INFO, "Frame from MM is DROPPED as Receive Buffer is full. " + event);
+                logger.log(Level.INFO, "Receive Module: Dropped the Frame from MM due to lack of space in the Receive Buffer. " + event);
             } else {
                 event.setRbTimeStamp(Simulator.getTime());
                 recBuffer.add(event);
@@ -95,7 +95,7 @@ public class ReceiveModule {
     
     private Event processRMVacateEvent(Event event) {
         Event eventAfterRMRPPProcessing = null;
-        logger.log(Level.INFO, "Frame is vacated from RM. " + event);
+        logger.log(Level.INFO, "Receive Module: removing the Frame. " + event);
         Simulator.finishEvent(event);
         rpp.setBusy(false);
         if (recBuffer.isEmpty()) {

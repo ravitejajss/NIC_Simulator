@@ -48,7 +48,7 @@ public class Simulator {
                 QueueEvents queueEvents = eventsList.poll();
                 currentProcessingEvents = queueEvents.getEventsAtThisTime();
                 setTime(queueEvents.getTime());
-                //System.out.println("Event processed time: " + getTime());
+                System.out.println("Event processed time: " + getTime());
                 for (Event event : currentProcessingEvents) {
                     Event returnedEvent;
                     if (event.getType().startsWith("RM_")) {

@@ -55,18 +55,18 @@ public class SendModule {
 			return processSM_SPPEnterPacket(event);
 		}
 		else if (event.getType().equals("SM_SPPExit")){
-			logger.log(Level.INFO, "Message is being FINISHED in SM. " + event);
+			logger.log(Level.INFO, "Send Module: finishing the event. " + event);
 			Simulator.finishEvent(event);
 			return null;
 		}
 		else {
-			logger.log(Level.WARNING, "Event wrongly sent to Send module discarding: " + event);
+			logger.log(Level.WARNING, "Send Module: Discardig the wrongly sent event: " + event);
 			return null;
 		}
 	}
 
 	public Event processSM_PQPacket(Event event) {
-		logger.log(Level.INFO, "Message is being PROCESSED in SM. " + event);
+		logger.log(Level.INFO, "Send Module: Processing the event. " + event);
 	    Event eventSMProcessed = null;
 	    int messageSize = event.getMessageLength();
 	    totalMessages++; 
@@ -77,8 +77,8 @@ public class SendModule {
 	            pktQSize = pktQSize - event.getMessageLength();
 	        } else {
 	            droppedMessages++;
-	            logger.log(Level.INFO, "Message is DROPPED "
-	                    + "as Packet Queue does not have enough space. " + event);
+	            logger.log(Level.INFO, "Send Module: Due to the lack of space in Packet Queue the event is DROPPED "
+	                     + event);
 	        }
 	    } else {
 	        eventSMProcessed = pktQueue.poll();
@@ -92,8 +92,8 @@ public class SendModule {
 	                
 	            } else {
 	                droppedMessages++;
-	                logger.log(Level.INFO, "Message is DROPPED "
-	                        + "as Packet Queue does not have enough space. " + event);
+	                logger.log(Level.INFO, "Send Module: Due to the lack of space in Packet Queue the event is DROPPED "
+	                     + event);
 	            }
 	        } else {
 	            eventSMProcessed = new Event(event);
@@ -106,7 +106,7 @@ public class SendModule {
 	}
 
 	public Event processSM_SPPEnterPacket(Event event) {
-		logger.log(Level.INFO, "Message is being VACATED from PP in SM. " + event);
+		logger.log(Level.INFO, "Send Module: Event in pp is being removed. " + event);
         event.setSppTimeStamp(Simulator.getTime());
         spp.setCurrentEvent(event);
         Event eventAfterSPPProcessing = ProtocolProcessing();

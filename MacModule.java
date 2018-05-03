@@ -43,7 +43,7 @@ public class MacModule {
             Event e = sendModule.processFrames();
             if (e != null) {
                 totalFramesProcessed++;
-                logger.log(Level.INFO, "Processing Frame from Sender Module. " + e);
+                logger.log(Level.INFO, "MAC MODULE: Processing Frame from Transfer Buffer. " + e);
                 if (e.isLastSendFrame()) {
                     eventOut = new Event(e);
                     eventOut.setType("SM_SPPExit");
@@ -56,15 +56,15 @@ public class MacModule {
             
             if (uniRandNum > destProb) {
                 notDestinedFrames++;
-                logger.log(Level.INFO, "Frame is DROPPED as it is for wrong destination. " + event);            
+                logger.log(Level.INFO, "MAC MODULE: Wrong destination Frame is received. So, the Frame is DROPPED . " + event);            
             }else {
                 destinedFrames++;
-                logger.log(Level.INFO, "Frame is PROCESSED as it for correct destination. " + event);
+                logger.log(Level.INFO, "MAC MODULE: Correct destination Frame is beeing PROCESSED. " + event);
                 eventOut = new Event("RM_REC", FRAME_SIZE, Simulator.getTime());
                 eventOut.setWaitPeriod(recTime);
             }
         } else {
-            logger.log(Level.WARNING, "Event wrongly sent to MM module discarding. " + event);
+            logger.log(Level.WARNING, "MAC MODULE: Discarding the wrongly sent Event. " + event);
         }
         return eventOut;
     }
