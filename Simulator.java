@@ -29,7 +29,7 @@ public class Simulator {
         
         double destinationProbability = 0.5;
         int meanMessageLength = 32;
-        int possionMean = 100;
+        int poissonMean = 100;
         double isReceiveModeProb = 0.5;
         long mmTimeInterval = 16l;
         long convergance = 50;
@@ -43,7 +43,7 @@ public class Simulator {
             List<Event> currentProcessingEvents;
 
             PriorityQueue<QueueEvents> eventsList = new PriorityQueue<QueueEvents>();
-            getPossionEvents(eventsList, possionMean, meanMessageLength);
+            getPoissonEvents(eventsList, poissonMean, meanMessageLength);
             getMacReceiveEvents(eventsList, isReceiveModeProb, mmTimeInterval);            
             
             while (!eventsList.isEmpty()) {
@@ -109,11 +109,11 @@ public class Simulator {
         }
     } 
     
-    private static void getPossionEvents(PriorityQueue<QueueEvents> eventsList, 
-        int possionMean, int messageLengthMean){
+    private static void getPoissonEvents(PriorityQueue<QueueEvents> eventsList, 
+        int poissonMean, int messageLengthMean){
         long nextArrival = getTime();
         for(int i = 0; i < 200 ; i++){
-            long interArrival   = (long)StdRandom.poisson(possionMean);
+            long interArrival   = (long)StdRandom.poisson(poissonMean);
             nextArrival = nextArrival + interArrival;
             int messageLength =  (int) StdRandom.exp(1.0 / (messageLengthMean * 1024));
             messageLength = Math.min(messageLength, (64 * 1024)); 
