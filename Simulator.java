@@ -46,6 +46,12 @@ public class Simulator {
             getPossionEvents(eventsList, possionMean, meanMessageLength);
             getMacReceiveEvents(eventsList, isReceiveModeProb, mmTimeInterval);            
             
+           /* for (QueueEvents eve: eventsList) {
+            	for(Event e : eve.getEventsAtThisTime()) {
+            		System.out.println(e.getType()+": "+e.getArrivalTimeStamp());
+            	}
+            }*/
+            
             while (!eventsList.isEmpty()) {
                 QueueEvents queueEvents = eventsList.poll();
                 currentProcessingEvents = queueEvents.getEventsAtThisTime();
@@ -53,6 +59,7 @@ public class Simulator {
                 System.out.println("Event processed time: " + getTime());
                 for (Event event : currentProcessingEvents) {
                     Event returnedEvent;
+                    System.out.println(event.getType()+": "+event.getArrivalTimeStamp());
                     if (event.getType().startsWith("RM_")) {
                         returnedEvent = receiverModule.processEvent(event);
                         if (returnedEvent != null) {
@@ -110,13 +117,12 @@ public class Simulator {
     } 
     
     private static void getPossionEvents(PriorityQueue<QueueEvents> eventsList, 
-            int possionMean, int messageLengthMean){
+        int possionMean, int messageLengthMean){
         long nextArrival = getTime();
         for(int i = 0; i < 200 ; i++){
-            long interArrival   = (long)StdRandom.exp(1.0/possionMean);
+            long interArrival   = (long)StdRandom.poisson(possionMean);
             nextArrival = nextArrival + interArrival;
             int messageLength =  (int) StdRandom.exp(1.0 / (messageLengthMean * 1024));
-            // clamp the message length to 64KB
             messageLength = Math.min(messageLength, (64 * 1024)); 
             Event e = new Event("SM_PQ", messageLength, nextArrival);
             e.setTotalMessageLength(messageLength);
@@ -214,8 +220,7 @@ public class Simulator {
                 + "Average Throughput: " + getThroughPut();     
     }
     
-    public static void getMacReceiveEvents(PriorityQueue<QueueEvents> eventsList, double isReceiveModeProb,
-            long timeSlot) {
+    public static void getMacReceiveEvents(PriorityQueue<QueueEvents> eventsList, double isReceiveModeProb, long timeSlot) {
         int numTimeSlots = (int) Math.ceil(maxEventTime * 1.0 / timeSlot);
         long mmTimeEvent = getTime();
         for (int i = 0; i < numTimeSlots; i++) {
