@@ -11,19 +11,19 @@ public class MacModule {
     private Handler fileHandler;
     private int FRAME_SIZE = 1500;
     private SendModule sendModule;
-    private double destinedProbability;
-    private long recTimeInterval;
-    private long sendTimeInterval;
+    private double destProb;
+    private long recTime;
+    private long sendTime;
     private long totalFramesProcessed;
     private long notDestinedFrames;
     private long destinedFrames;
     
-    public MacModule(SendModule sendModule, double destinedProbability, long recTimeInterval, 
-    		long sendTimeInterval) throws SecurityException, IOException {
+    public MacModule(SendModule sendModule, double destProb, long recTime, 
+    		long sendTime) throws SecurityException, IOException {
         this.sendModule = sendModule;
-        this.destinedProbability = destinedProbability;
-        this.recTimeInterval = recTimeInterval;
-        this.sendTimeInterval = sendTimeInterval;
+        this.destProb = destProb;
+        this.recTime = recTime;
+        this.sendTime = sendTime;
         
         fileHandler = new FileHandler("contoller.log");
         SimpleFormatter formatter = new SimpleFormatter();            //Logging in Human readable format.
@@ -37,36 +37,36 @@ public class MacModule {
     }
     
     public Event processEvent(Event event) {
-        Event eventAfterMMProcessing = null;
-        double uniformRandNum = 0;
+        Event eventOut = null;
+        double uniRandNum = 0;
         if (event.getType().equals("MM_SEND")) {
             Event e = sendModule.processFrames();
             if (e != null) {
                 totalFramesProcessed++;
                 logger.log(Level.INFO, "Processing Frame from Sender Module. " + e);
                 if (e.isLastSendFrame()) {
-                    eventAfterMMProcessing = new Event(e);
-                    eventAfterMMProcessing.setType("SM_SPPExit");
-                    eventAfterMMProcessing.setWaitPeriod(Simulator.getTime() - eventAfterMMProcessing.getArrivalTimeStamp() + sendTimeInterval);
+                    eventOut = new Event(e);
+                    eventOut.setType("SM_SPPExit");
+                    eventOut.setWaitPeriod(Simulator.getTime() - eventOut.getArrivalTimeStamp() + sendTime);
                 } 
             }
         } else if (event.getType().equals("MM_REC")) {
             totalFramesProcessed++;
-            uniformRandNum = Math.random();
+            uniRandNum = Math.random();
             
-            if (uniformRandNum > destinedProbability) {
+            if (uniRandNum > destProb) {
                 notDestinedFrames++;
                 logger.log(Level.INFO, "Frame is DROPPED as it is for wrong destination. " + event);            
             }else {
                 destinedFrames++;
                 logger.log(Level.INFO, "Frame is PROCESSED as it for correct destination. " + event);
-                eventAfterMMProcessing = new Event("RM_REC", FRAME_SIZE, Simulator.getTime());
-                eventAfterMMProcessing.setWaitPeriod(recTimeInterval);
+                eventOut = new Event("RM_REC", FRAME_SIZE, Simulator.getTime());
+                eventOut.setWaitPeriod(recTime);
             }
         } else {
             logger.log(Level.WARNING, "Event wrongly sent to MM module discarding. " + event);
         }
-        return eventAfterMMProcessing;
+        return eventOut;
     }
 
     public String getMMStats() {

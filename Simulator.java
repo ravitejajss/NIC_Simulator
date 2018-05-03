@@ -20,22 +20,20 @@ public class Simulator {
     public static void main(String args[]) throws SecurityException, IOException {
         RPP rpp = new RPP(false, 5);
         SPP spp = new SPP(false, 2);
-        ReceiverModule receiverModule = new ReceiverModule(rpp, 6000);
+        ReceiveModule receiverModule = new ReceiveModule(rpp, 6000);
         
-        int smTotalBufferCapacity = 512 * 1024;
-        int smPacketQueueCapacity = 256 * 1024;
-        int smTransmitBufferCapacity = smTotalBufferCapacity - smPacketQueueCapacity;
-        SendModule sendModule = new SendModule(spp, smPacketQueueCapacity, smTransmitBufferCapacity);
+        int smTotalCapacity = 512 * 1024;
+        int smPQCapacity = 256 * 1024;
+        int smTBCapacity = smTotalCapacity - smPQCapacity;
+        SendModule sendModule = new SendModule(spp, smPQCapacity, smTBCapacity);
         
-        double destinationProbability = 0.5;
-        int meanMessageLength = 32;
+        double destProbability = 0.5;
+        int meanMsgLen = 32;
         int poissonMean = 100;
-        double isReceiveModeProb = 0.5;
-        long mmTimeInterval = 16l;
-        long convergance = 50;
+        double recModeProb = 0.5;
+        long macTime = 16l;
         
-        MacModule macModule = new MacModule(sendModule, destinationProbability, mmTimeInterval, mmTimeInterval);
-        long oldAvgMetric = 0;
+        MacModule macModule = new MacModule(sendModule, destProbability, macTime, macTime);
         boolean run = true;
         
         while (run) {
@@ -43,8 +41,8 @@ public class Simulator {
             List<Event> currentProcessingEvents;
 
             PriorityQueue<QueueEvents> eventsList = new PriorityQueue<QueueEvents>();
-            getPoissonEvents(eventsList, poissonMean, meanMessageLength);
-            getMacReceiveEvents(eventsList, isReceiveModeProb, mmTimeInterval);            
+            getPoissonEvents(eventsList, poissonMean, meanMsgLen);
+            getMacReceiveEvents(eventsList, recModeProb, macTime);            
             
             while (!eventsList.isEmpty()) {
                 QueueEvents queueEvents = eventsList.poll();
@@ -79,9 +77,6 @@ public class Simulator {
                     }
                 }
             }
-            long newAvgMetric = getAverageDelay();
-            run = (Math.abs(newAvgMetric - oldAvgMetric) > convergance);
-            oldAvgMetric = newAvgMetric;
         }
         
         System.out.println(macModule.getMMStats() +"\n\n"+ receiverModule.getRMStats() +"\n\n"+ sendModule.getSMStats() +"\n\n"+ getStats());
@@ -110,12 +105,12 @@ public class Simulator {
     } 
     
     private static void getPoissonEvents(PriorityQueue<QueueEvents> eventsList, 
-        int poissonMean, int messageLengthMean){
+        int poissonMean, int msgLenMean){
         long nextArrival = getTime();
         for(int i = 0; i < 200 ; i++){
             long interArrival   = (long)StdRandom.poisson(poissonMean);
             nextArrival = nextArrival + interArrival;
-            int messageLength =  (int) StdRandom.exp(1.0 / (messageLengthMean * 1024));
+            int messageLength =  (int) StdRandom.exp(1.0 / (msgLenMean * 1024));
             messageLength = Math.min(messageLength, (64 * 1024)); 
             Event e = new Event("SM_PQ", messageLength, nextArrival);
             e.setTotalMessageLength(messageLength);

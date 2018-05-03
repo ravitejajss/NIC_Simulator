@@ -10,7 +10,7 @@ public class SendModule {
 	
 	private final int FRAME_SIZE = 1526;
 	private final int FRAME_DATA_SIZE = 1500;
-	private Queue<Event> packetQueue;
+	private Queue<Event> pktQueue;
 	private Queue<Event> transmitBuffer;
 	private SPP spp;
 	private int transBuffSize;
@@ -20,12 +20,12 @@ public class SendModule {
     private int totalMessages;
     private int totalFrames;
     private int droppedMessages;
-    private long tbDelay;
-    private long pqDelay;
-    private long sppDelay;
+    private long delayInTB;
+    private long delayInPQ;
+    private long delayInSPP;
 	
 	public SendModule(SPP spp, int transBuffSize, int pktQSize) throws SecurityException, IOException{
-		this.packetQueue = new LinkedList<Event>();
+		this.pktQueue = new LinkedList<Event>();
 		this.transmitBuffer = new LinkedList<Event>();
 		
 		this.spp = spp;
@@ -42,9 +42,9 @@ public class SendModule {
         totalMessages = 0;
         totalFrames = 0;
         droppedMessages = 0;
-        tbDelay = 0;
-        pqDelay = 0;
-        sppDelay = 0;
+        delayInTB = 0;
+        delayInPQ = 0;
+        delayInSPP = 0;
 	}
 	
 	public Event processPacket(Event event) {
@@ -67,13 +67,13 @@ public class SendModule {
 
 	public Event processSM_PQPacket(Event event) {
 		logger.log(Level.INFO, "Message is being PROCESSED in SM. " + event);
-	    Event eventAfterSMProcessing = null;
+	    Event eventSMProcessed = null;
 	    int messageSize = event.getMessageLength();
 	    totalMessages++; 
 	    if (spp.isBusy()) {
 	        if (messageSize <= pktQSize) {
 	            event.setPqTimeStamp(Simulator.getTime());
-	            packetQueue.add(event);
+	            pktQueue.add(event);
 	            pktQSize = pktQSize - event.getMessageLength();
 	        } else {
 	            droppedMessages++;
@@ -81,13 +81,13 @@ public class SendModule {
 	                    + "as Packet Queue does not have enough space. " + event);
 	        }
 	    } else {
-	        eventAfterSMProcessing = packetQueue.poll();
-	        if (eventAfterSMProcessing != null) {
-	            pqDelay += Simulator.getTime() - eventAfterSMProcessing.getPqTimeStamp();
-	            pktQSize = pktQSize + eventAfterSMProcessing.getMessageLength();
+	        eventSMProcessed = pktQueue.poll();
+	        if (eventSMProcessed != null) {
+	            delayInPQ += Simulator.getTime() - eventSMProcessed.getPqTimeStamp();
+	            pktQSize = pktQSize + eventSMProcessed.getMessageLength();
 	            if (messageSize <= pktQSize) {
 	                event.setPqTimeStamp(Simulator.getTime());
-	                packetQueue.add(event);
+	                pktQueue.add(event);
 	                pktQSize = pktQSize - messageSize;
 	                
 	            } else {
@@ -96,13 +96,13 @@ public class SendModule {
 	                        + "as Packet Queue does not have enough space. " + event);
 	            }
 	        } else {
-	            eventAfterSMProcessing = new Event(event);
+	            eventSMProcessed = new Event(event);
 	        }
 	        spp.setBusy(true);
-	        eventAfterSMProcessing.setType("SM_SPPEnter");
-	        eventAfterSMProcessing.setWaitPeriod(spp.getTimeforProcessingMessage(eventAfterSMProcessing.getMessageLength()));
+	        eventSMProcessed.setType("SM_SPPEnter");
+	        eventSMProcessed.setWaitPeriod(spp.getTimeforProcessingMessage(eventSMProcessed.getMessageLength()));
 	    }
-	    return eventAfterSMProcessing;
+	    return eventSMProcessed;
 	}
 
 	public Event processSM_SPPEnterPacket(Event event) {
@@ -114,18 +114,18 @@ public class SendModule {
 	}
 	
     public Event processFrames() {
-    	Event eventToMM = null;
+    	Event eventToMac = null;
         if (!transmitBuffer.isEmpty()) {
             totalFrames++;
-            eventToMM = transmitBuffer.remove();
+            eventToMac = transmitBuffer.remove();
             transBuffSize = transBuffSize + FRAME_SIZE;
-            tbDelay += Simulator.getTime() - eventToMM.getTbTimeStamp();
+            delayInTB += Simulator.getTime() - eventToMac.getTbTimeStamp();
         }
-        return eventToMM;
+        return eventToMac;
     }
     
     public Event ProtocolProcessing() {
-    	Event eventAfterBusyWaitingProcessing = null;
+    	Event eventAfterProcessing = null;
         if (spp.isBusy() && spp.getCurrentEvent() != null) {
         	Event event = spp.getCurrentEvent();
             int messageSize = event.getMessageLength();
@@ -135,7 +135,7 @@ public class SendModule {
                 tb.setTotalMessageLength(event.getTotalMessageLength());
                 if (i == totalFramesInMessage) {
                     tb.setIsLastSendFrame(true);
-                    sppDelay += Simulator.getTime() - event.getSppTimeStamp();
+                    delayInSPP += Simulator.getTime() - event.getSppTimeStamp();
                 }
                 tb.setTbTimeStamp(Simulator.getTime());
                 transmitBuffer.add(tb);
@@ -147,20 +147,20 @@ public class SendModule {
             if (event.getMessageLength() <= 0) {
                 spp.setCurrentEvent(null);
                 spp.setBusy(false);
-                if (!packetQueue.isEmpty()) {
+                if (!pktQueue.isEmpty()) {
                    spp.setBusy(true);
-                   eventAfterBusyWaitingProcessing = new Event(packetQueue.remove());
-                   eventAfterBusyWaitingProcessing.setType("SM_SPPEnter");
-                   long waitTime = spp.getTimeforProcessingMessage(eventAfterBusyWaitingProcessing.getMessageLength());
-                   eventAfterBusyWaitingProcessing.setWaitPeriod(Simulator.getTime() - eventAfterBusyWaitingProcessing.getArrivalTimeStamp() + waitTime);
-                   pqDelay += Simulator.getTime() - eventAfterBusyWaitingProcessing.getPqTimeStamp();
+                   eventAfterProcessing = new Event(pktQueue.remove());
+                   eventAfterProcessing.setType("SM_SPPEnter");
+                   long waitTime = spp.getTimeforProcessingMessage(eventAfterProcessing.getMessageLength());
+                   eventAfterProcessing.setWaitPeriod(Simulator.getTime() - eventAfterProcessing.getArrivalTimeStamp() + waitTime);
+                   delayInPQ += Simulator.getTime() - eventAfterProcessing.getPqTimeStamp();
                 }                
             } else {
                 spp.setBusy(true);
                 spp.setCurrentEvent(event);
             }
         }
-		return eventAfterBusyWaitingProcessing;
+		return eventAfterProcessing;
     }
     
     public int getDroppedMessages() {
@@ -172,8 +172,8 @@ public class SendModule {
                 + "Total number of Messages processed by SM: " + totalMessages + "\n"
                 + "Total number of Messages dropped by SM: " + droppedMessages + "\n"
                 + "Total number of Frames in SM: " + totalFrames + "\n"
-                + "Average delay in PQ: " + (pqDelay * 1.0) / totalMessages + "\n"
-                + "Average delay in SPP: " + (sppDelay * 1.0) / totalMessages + "\n"
-                + "Average delay in TB: " + (tbDelay * 1.0) / totalFrames;
+                + "Average delay in PQ: " + (delayInPQ * 1.0) / totalMessages + "\n"
+                + "Average delay in SPP: " + (delayInSPP * 1.0) / totalMessages + "\n"
+                + "Average delay in TB: " + (delayInTB * 1.0) / totalFrames;
     }
 }
