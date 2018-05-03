@@ -13,9 +13,7 @@ public class ReceiverModule {
     private static final int FRAME_SIZE = 1500;
     private static Handler fileHandler;
 
-    private TimeSource timeSource;
     private ReceivePacketProcessor rpp;
-    private FinisherModule finisherModule;
     
     private Queue<Event> receiveBuffer;
     private int maxFramesInRB;
@@ -26,12 +24,9 @@ public class ReceiverModule {
     private int rbDelay;
 
     
-    public ReceiverModule(final TimeSource timeSource, final ReceivePacketProcessor rpp,
-             final FinisherModule finisherModule, final int receiveBufferSize) throws SecurityException, IOException {
+    public ReceiverModule(final ReceivePacketProcessor rpp, final int receiveBufferSize) throws SecurityException, IOException {
         // Initialize RM parameters
-        this.timeSource = timeSource;
         this.rpp = rpp;
-        this.finisherModule = finisherModule;
         
         // set the max number of frames in ReceiveBuffer
         maxFramesInRB = receiveBufferSize / FRAME_SIZE;
@@ -40,8 +35,9 @@ public class ReceiverModule {
         receiveBuffer = new LinkedList<Event>();
         
         // Initialize logger
-        fileHandler = new FileHandler("./receivebuffer-log");
+        fileHandler = new FileHandler("receivebuffer.log");
         logger.addHandler(fileHandler);
+		logger.setUseParentHandlers(false);
         
         //Initialing stats variables
         totalFramesProcessed = 0;
@@ -92,7 +88,7 @@ public class ReceiverModule {
                 logger.log(Level.INFO, "Frame from MM is DROPPED "
                         + "as Receive Buffer is full. " + event);
             } else {
-                event.setRbTimeStamp(timeSource.getTime());
+                event.setRbTimeStamp(NICSimulator.getTime());
                 receiveBuffer.add(event);
             }                
         } else {
@@ -102,18 +98,18 @@ public class ReceiverModule {
             }
             
             int framesToAccumulate = rpp.getFramesToAccumulate();
-            event.setRbTimeStamp(timeSource.getTime());
+            event.setRbTimeStamp(NICSimulator.getTime());
             receiveBuffer.add(event);
             if (framesToAccumulate <= receiveBuffer.size()) {
                 rpp.setBusy(true);
                 eventAfterRMProcessing = new Event(receiveBuffer.remove());                    
                 eventAfterRMProcessing.setEventType("RM_VACATE");
-                rbDelay += (timeSource.getTime() - eventAfterRMProcessing.getRbTimeStamp());
+                rbDelay += (NICSimulator.getTime() - eventAfterRMProcessing.getRbTimeStamp());
                 long firstFrameTimeStamp = eventAfterRMProcessing.getArrivalTimeStamp();
                 long lastFrameTimeStamp = firstFrameTimeStamp;
                 for (int i = 1; i < framesToAccumulate; i++) {
                     Event waitingEvent = receiveBuffer.remove();
-                    rbDelay += (timeSource.getTime() - waitingEvent.getRbTimeStamp());
+                    rbDelay += (NICSimulator.getTime() - waitingEvent.getRbTimeStamp());
                     eventAfterRMProcessing.addLinkedEvents(waitingEvent);
                     if ((i + 1) == framesToAccumulate) {
                         lastFrameTimeStamp = waitingEvent.getArrivalTimeStamp();
@@ -140,7 +136,7 @@ public class ReceiverModule {
         
         // calculates all the Delays and other stats for the event and it's linked ones.
         logger.log(Level.INFO, "Frame is vacated from RM. " + event);
-        finisherModule.finishEvent(event);
+        NICSimulator.finishEvent(event);
         rpp.setBusy(false);
 
         if (receiveBuffer.isEmpty()) {
@@ -151,12 +147,12 @@ public class ReceiverModule {
             if (framesToAccumulate <= receiveBuffer.size()) {
                 rpp.setBusy(true);
                 eventAfterRMRPPProcessing = new Event(receiveBuffer.remove());
-                rbDelay += (timeSource.getTime() - eventAfterRMRPPProcessing.getRbTimeStamp());
+                rbDelay += (NICSimulator.getTime() - eventAfterRMRPPProcessing.getRbTimeStamp());
                 eventAfterRMRPPProcessing.setEventType("RM_VACATE");
                 eventAfterRMRPPProcessing.setWaitPeriod(rpp.getTimeForProcessingFrames(FRAME_SIZE));
                 for (int i = 1; i < framesToAccumulate; i++) {
                     Event waitingEvent = receiveBuffer.remove();
-                    rbDelay += (timeSource.getTime() - waitingEvent.getRbTimeStamp());
+                    rbDelay += (NICSimulator.getTime() - waitingEvent.getRbTimeStamp());
                     eventAfterRMRPPProcessing.addLinkedEvents(waitingEvent);
                 }                    
             }

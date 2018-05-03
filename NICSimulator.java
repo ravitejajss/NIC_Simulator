@@ -9,19 +9,25 @@ public class NICSimulator {
     public static final int FRAME_SIZE = 1526;
     private static long maxEventTime = 0l;
 
+    private static long time;
+    
+    private static long rmEvents;
+    private static long smEvents;
+    private static long smEventDelay;
+    private static long rmEventDelay;
+    private static long rmBytes;
+    private static long smBytes;
+    
     public static void main(String args[]) throws SecurityException, IOException {
         // initialize all the needed objects.
-        TimeSource ts = new TimeSource(0);
         ReceivePacketProcessor rpp = new ReceivePacketProcessor(false, 5);
-        SendPacketProcessor spp = new SendPacketProcessor(false, 2);
-        FinisherModule fm = new FinisherModule(ts);
-        ReceiverModule rm = new ReceiverModule(ts, rpp, fm, 6000);
+        ReceiverModule rm = new ReceiverModule(rpp, 6000);
         
         // Set Buffer capacity values for send module.
         int smTotalBufferCapacity = 512 * 1024;
-        int smPacketQueueCapacity = 64 * 1024;
+        int smPacketQueueCapacity = 256 * 1024;
         int smTransmitBufferCapacity = smTotalBufferCapacity - smPacketQueueCapacity;
-        SendModule sm = new SendModule(ts, spp, fm, smPacketQueueCapacity, smTransmitBufferCapacity);
+        SendModule sm = new SendModule(smPacketQueueCapacity, smTransmitBufferCapacity, false, 2);
         
         double destinationProbability = 0.5; // Ps
         int meanMessageLength = 16;
@@ -32,7 +38,7 @@ public class NICSimulator {
         //converging
         long convergance = 50;
         
-        MacModule mm = new MacModule(ts, sm, destinationProbability, mmTimeInterval, mmTimeInterval);
+        MacModule mm = new MacModule(sm, destinationProbability, mmTimeInterval, mmTimeInterval);
         long oldAvgMetric = 0;
         boolean run = true;
         
@@ -42,15 +48,15 @@ public class NICSimulator {
 
             PriorityQueue<QueueEvents> eventsList = new PriorityQueue<QueueEvents>();
             // Call the method to add send events.
-            getPossionEvents(eventsList, possionMean, meanMessageLength, ts);
+            getPossionEvents(eventsList, possionMean, meanMessageLength);
             // Call the method to add Mac events.
-            getMacReceiveEvents(eventsList, isReceiveModeProb, mmTimeInterval, ts);            
+            getMacReceiveEvents(eventsList, isReceiveModeProb, mmTimeInterval);            
             
             while (!eventsList.isEmpty()) {
                 QueueEvents queueEvents = eventsList.poll();
                 currentProcessingEvents = queueEvents.getEventsAtThisTime();
-                ts.setTime(queueEvents.getTime());
-                System.out.println("Event processed time: " + ts.getTime());
+                setTime(queueEvents.getTime());
+                System.out.println("Event processed time: " + getTime());
                 for (Event event : currentProcessingEvents) {
                     Event returnedEvent;
                     if (event.getEventType().startsWith("RM_")) {
@@ -81,7 +87,7 @@ public class NICSimulator {
                 }
             }
 
-            long newAvgMetric = fm.getAverageDelay();
+            long newAvgMetric = getAverageDelay();
             run = (Math.abs(newAvgMetric - oldAvgMetric) > convergance);
             oldAvgMetric = newAvgMetric;
         }
@@ -92,8 +98,100 @@ public class NICSimulator {
         System.out.println();
         System.out.println(sm.getSMStats());
         System.out.println();
-        System.out.println(fm.getStats());
+        System.out.println(getStats());
         
+    }
+    
+    public static long getTime() {
+        return time;
+    }
+    
+    public static void setTime(long t) {
+        time = t;
+    }
+    
+    public static void finishEvent(Event event) {
+        // Add code to calculate average delay and other stats for each event.
+        if (event.getEventType().startsWith("RM_")) {
+            rmEvents++;
+            rmEventDelay += (getTime() - event.getArrivalTimeStamp());
+            rmBytes += event.getMessageLength();
+            // also process all the linked events
+            for (Event e : event.getLinkedEvents()) {
+                rmEvents++;
+                rmEventDelay += (getTime() - e.getArrivalTimeStamp());
+                rmBytes += event.getMessageLength();
+            }
+        } else if (event.getEventType().startsWith("SM_")) {
+            smEvents++;
+            smEventDelay += (getTime() - event.getArrivalTimeStamp());
+            smBytes += event.getTotalMessageLength();
+            // also process all the linked events
+            for (Event e : event.getLinkedEvents()) {
+                smEvents++;
+                smEventDelay += (getTime() - e.getArrivalTimeStamp());
+                smBytes += event.getTotalMessageLength();
+            }
+        }
+    }
+    
+    public static long getFinishedSendEvents() {
+        return smEvents;
+    }
+    
+    public static long getFinishedReceiveEvents() {
+        return rmEvents;
+    }
+    
+    public static long getFinishedSendDelay() {
+        return smEventDelay;
+    }
+    
+    public static long getFinishedReceiveDelay() {
+        return rmEventDelay;
+    }
+    
+    public static long getAverageSendDelay() {
+        if (smEvents != 0) {
+            return smEventDelay / smEvents;
+        } else {
+            return 0;
+        }               
+    }
+    
+    public static long getAverageReceiveDelay() {
+        if (rmEvents != 0) {
+            return rmEventDelay / rmEvents;
+        } else {
+            return 0;
+        }
+    } 
+    
+    public static long getAverageDelay() {
+        if (rmEvents == 0 && smEvents == 0) {
+            return 0;
+        } else {
+            return (smEventDelay + rmEventDelay)  / (smEvents + rmEvents);
+        }
+    }
+    
+    public static double getThroughPut() {
+        if (rmEvents == 0 && smEvents == 0) {
+            return 0;
+        } else {
+            return (smBytes + rmBytes)  / (smEventDelay + rmEventDelay);
+        }
+    }
+    
+    public static String getStats() {
+        return "Finisher Module stats: \n"
+                + "Total finished send events: " + smEvents + "\n"
+                + "Average send events Delay: " + getAverageSendDelay() + "\n"
+                + "Total finished receive events: " + rmEvents + "\n"
+                + "Total wait time in RB: " + rmEventDelay + "\n"
+                + "Average Receive events Delay: " + getAverageReceiveDelay() + "\n"
+                + "Total Average events Delay: " + getAverageDelay() + "\n"
+                + "Average Throughput: " + getThroughPut();        
     }
     
     private static void addEvent(PriorityQueue<QueueEvents> eventsList, Event event) {
@@ -123,8 +221,8 @@ public class NICSimulator {
     } 
     
     private static void getPossionEvents(PriorityQueue<QueueEvents> eventsList, 
-            int possionMean, int messageLengthMean, TimeSource ts){
-        long nextArrival = ts.getTime();
+            int possionMean, int messageLengthMean){
+        long nextArrival = getTime();
         for(int i = 0; i < 200 ; i++){
             long interArrival   = (long)StdRandom.poisson(possionMean);
             nextArrival = nextArrival + interArrival;
@@ -139,9 +237,9 @@ public class NICSimulator {
     }
     
     private static void getMacReceiveEvents(PriorityQueue<QueueEvents> eventsList, double isReceiveModeProb,
-            long timeSlot, TimeSource ts) {
+            long timeSlot) {
         int numTimeSlots = (int) Math.ceil(maxEventTime * 1.0 / timeSlot);
-        long mmTimeEvent = ts.getTime();
+        long mmTimeEvent = getTime();
         for (int i = 0; i < numTimeSlots; i++) {
             mmTimeEvent += timeSlot;
             Event e;

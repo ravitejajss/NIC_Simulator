@@ -10,7 +10,6 @@ public class MacModule {
     private static final Logger logger = Logger.getLogger(MacModule.class.getName());
     private static Handler fileHandler;
     private static final int FRAME_SIZE = 1500;
-    private TimeSource timeSource;
     private SendModule sendModule;
     private double destinedProbability;
     private long recTimeInterval;
@@ -22,18 +21,18 @@ public class MacModule {
     private long notDestinedFrames;
     private long destinedFrames;
     
-    public MacModule(final TimeSource timeSource, final SendModule sendModule,
+    public MacModule(final SendModule sendModule,
             final double destinedProbability, final long recTimeInterval,
             final long sendTimeInterval) throws SecurityException, IOException {
-        this.timeSource = timeSource;
         this.sendModule = sendModule;
         this.destinedProbability = destinedProbability;
         this.recTimeInterval = recTimeInterval;
         this.sendTimeInterval = sendTimeInterval;
         
         // Initialize logger
-        fileHandler = new FileHandler("./contoller-log");
+        fileHandler = new FileHandler("contoller.log");
         logger.addHandler(fileHandler);
+		logger.setUseParentHandlers(false);
         
         //Initialing stats variables
         totalFramesProcessed = 0;
@@ -64,7 +63,7 @@ public class MacModule {
                     // create a new event if the frame is the last event in the message and return 
                     eventAfterMMProcessing = new Event(e);
                     eventAfterMMProcessing.setEventType("SM_FIN");
-                    eventAfterMMProcessing.setWaitPeriod(timeSource.getTime() - eventAfterMMProcessing.getArrivalTimeStamp() + sendTimeInterval);
+                    eventAfterMMProcessing.setWaitPeriod(NICSimulator.getTime() - eventAfterMMProcessing.getArrivalTimeStamp() + sendTimeInterval);
                 } 
             }
         } else if (event.getEventType().equals("MM_REC")) {
@@ -80,7 +79,7 @@ public class MacModule {
                 destinedFrames++;
                 logger.log(Level.INFO, "Frame is PROCESSED as it for correct destination. " + event);
                 // create a new event and return it.
-                eventAfterMMProcessing = new Event("RM_REC", FRAME_SIZE, timeSource.getTime());
+                eventAfterMMProcessing = new Event("RM_REC", FRAME_SIZE, NICSimulator.getTime());
                 eventAfterMMProcessing.setWaitPeriod(recTimeInterval);
             }
         } else {
