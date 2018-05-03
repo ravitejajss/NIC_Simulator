@@ -2,6 +2,7 @@
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Random;
 import java.util.logging.FileHandler;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -13,10 +14,13 @@ public class ReceiverModule {
     private static final int FRAME_SIZE = 1500;
     private static Handler fileHandler;
 
-    private ReceivePacketProcessor rpp;
-    
     private Queue<Event> receiveBuffer;
     private int maxFramesInRB;
+    
+    private boolean isBusy;
+    private float processingRate;
+    private int framesToAccumulate;
+    private Random rand = new Random();
     
     // Variables to store stats
     private int totalFramesProcessed;
@@ -24,10 +28,7 @@ public class ReceiverModule {
     private int rbDelay;
 
     
-    public ReceiverModule(final ReceivePacketProcessor rpp, final int receiveBufferSize) throws SecurityException, IOException {
-        // Initialize RM parameters
-        this.rpp = rpp;
-        
+    public ReceiverModule(final int receiveBufferSize, boolean isBusy, float processingRate) throws SecurityException, IOException {
         // set the max number of frames in ReceiveBuffer
         maxFramesInRB = receiveBufferSize / FRAME_SIZE;
         
@@ -39,6 +40,10 @@ public class ReceiverModule {
         logger.addHandler(fileHandler);
 		logger.setUseParentHandlers(false);
         
+		this.isBusy = isBusy;
+        this.processingRate = processingRate;
+        framesToAccumulate = 0;
+		
         //Initialing stats variables
         totalFramesProcessed = 0;
         droppedFrames = 0;
@@ -81,7 +86,7 @@ public class ReceiverModule {
         logger.log(Level.INFO, "Frame from MM is being PROCCESED in RM. " + event);
             
         // Step 1 checks status of RPP 
-        if (rpp.isBusy()) {
+        if (isBusy()) {
             // check if RB can store more Frames.
             if (receiveBuffer.size() >= maxFramesInRB) {
                 droppedFrames++;
@@ -93,15 +98,15 @@ public class ReceiverModule {
             }                
         } else {
             // Step 2 & step 3
-            if (!rpp.isFramesToAccumulateGenerated()) {
-                rpp.generateFramesToAccumulate();
+            if (!isFramesToAccumulateGenerated()) {
+                generateFramesToAccumulate();
             }
             
-            int framesToAccumulate = rpp.getFramesToAccumulate();
+            int framesToAccumulate = getFramesToAccumulate();
             event.setRbTimeStamp(NICSimulator.getTime());
             receiveBuffer.add(event);
             if (framesToAccumulate <= receiveBuffer.size()) {
-                rpp.setBusy(true);
+                setBusy(true);
                 eventAfterRMProcessing = new Event(receiveBuffer.remove());                    
                 eventAfterRMProcessing.setEventType("RM_VACATE");
                 rbDelay += (NICSimulator.getTime() - eventAfterRMProcessing.getRbTimeStamp());
@@ -115,7 +120,7 @@ public class ReceiverModule {
                         lastFrameTimeStamp = waitingEvent.getArrivalTimeStamp();
                     }
                 }     
-                eventAfterRMProcessing.setWaitPeriod(lastFrameTimeStamp - firstFrameTimeStamp + rpp.getTimeForProcessingFrames(FRAME_SIZE));
+                eventAfterRMProcessing.setWaitPeriod(lastFrameTimeStamp - firstFrameTimeStamp + getTimeForProcessingFrames(FRAME_SIZE));
             }                
         }
         
@@ -137,19 +142,19 @@ public class ReceiverModule {
         // calculates all the Delays and other stats for the event and it's linked ones.
         logger.log(Level.INFO, "Frame is vacated from RM. " + event);
         NICSimulator.finishEvent(event);
-        rpp.setBusy(false);
+        setBusy(false);
 
         if (receiveBuffer.isEmpty()) {
-            rpp.resetFramesToAccumulate();
+            resetFramesToAccumulate();
         } else {
-            rpp.generateFramesToAccumulate();
-            int framesToAccumulate = rpp.getFramesToAccumulate();
+            generateFramesToAccumulate();
+            int framesToAccumulate = getFramesToAccumulate();
             if (framesToAccumulate <= receiveBuffer.size()) {
-                rpp.setBusy(true);
+                setBusy(true);
                 eventAfterRMRPPProcessing = new Event(receiveBuffer.remove());
                 rbDelay += (NICSimulator.getTime() - eventAfterRMRPPProcessing.getRbTimeStamp());
                 eventAfterRMRPPProcessing.setEventType("RM_VACATE");
-                eventAfterRMRPPProcessing.setWaitPeriod(rpp.getTimeForProcessingFrames(FRAME_SIZE));
+                eventAfterRMRPPProcessing.setWaitPeriod(getTimeForProcessingFrames(FRAME_SIZE));
                 for (int i = 1; i < framesToAccumulate; i++) {
                     Event waitingEvent = receiveBuffer.remove();
                     rbDelay += (NICSimulator.getTime() - waitingEvent.getRbTimeStamp());
@@ -162,6 +167,43 @@ public class ReceiverModule {
     
     public int getDroppedFrames() {
         return droppedFrames;
+    }
+    
+    public boolean isBusy() {
+        return isBusy;
+    }
+
+    public void setBusy(boolean isBusy) {
+        this.isBusy = isBusy;
+    }
+    
+    public boolean isFramesToAccumulateGenerated() {
+        return framesToAccumulate != 0;
+    }
+    
+    public int getFramesToAccumulate() {
+        return framesToAccumulate;
+         
+    }
+    
+    public void generateFramesToAccumulate(){
+        framesToAccumulate = rand.nextInt(5) + 1;
+    }
+    
+    public void resetFramesToAccumulate() {
+        framesToAccumulate = 0;
+    }
+
+    public float getProcessingRate() {
+        return processingRate;
+    }
+
+    public void setProcessingRate(float processingRate) {
+        this.processingRate = processingRate;
+    }
+
+    public long getTimeForProcessingFrames(int frameSize) {
+        return (long)((processingRate * framesToAccumulate * frameSize * 8) / 1000);
     }
     
     /**

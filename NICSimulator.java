@@ -20,12 +20,11 @@ public class NICSimulator {
     
     public static void main(String args[]) throws SecurityException, IOException {
         // initialize all the needed objects.
-        ReceivePacketProcessor rpp = new ReceivePacketProcessor(false, 5);
-        ReceiverModule rm = new ReceiverModule(rpp, 6000);
+        ReceiverModule rm = new ReceiverModule(6000, false, 5);
         
         // Set Buffer capacity values for send module.
         int smTotalBufferCapacity = 512 * 1024;
-        int smPacketQueueCapacity = 256 * 1024;
+        int smPacketQueueCapacity = 512 * 1024;
         int smTransmitBufferCapacity = smTotalBufferCapacity - smPacketQueueCapacity;
         SendModule sm = new SendModule(smPacketQueueCapacity, smTransmitBufferCapacity, false, 2);
         
