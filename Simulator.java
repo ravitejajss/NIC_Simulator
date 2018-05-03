@@ -46,20 +46,13 @@ public class Simulator {
             getPossionEvents(eventsList, possionMean, meanMessageLength);
             getMacReceiveEvents(eventsList, isReceiveModeProb, mmTimeInterval);            
             
-           /* for (QueueEvents eve: eventsList) {
-            	for(Event e : eve.getEventsAtThisTime()) {
-            		System.out.println(e.getType()+": "+e.getArrivalTimeStamp());
-            	}
-            }*/
-            
             while (!eventsList.isEmpty()) {
                 QueueEvents queueEvents = eventsList.poll();
                 currentProcessingEvents = queueEvents.getEventsAtThisTime();
                 setTime(queueEvents.getTime());
-                System.out.println("Event processed time: " + getTime());
+                //System.out.println("Event processed time: " + getTime());
                 for (Event event : currentProcessingEvents) {
                     Event returnedEvent;
-                    System.out.println(event.getType()+": "+event.getArrivalTimeStamp());
                     if (event.getType().startsWith("RM_")) {
                         returnedEvent = receiverModule.processEvent(event);
                         if (returnedEvent != null) {

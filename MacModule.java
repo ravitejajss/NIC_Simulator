@@ -60,7 +60,7 @@ public class MacModule {
             }else {
                 destinedFrames++;
                 logger.log(Level.INFO, "Frame is PROCESSED as it for correct destination. " + event);
-                eventAfterMMProcessing = new Event("RM_REC", FRAME_SIZE, 0);//timeSource.getTime());
+                eventAfterMMProcessing = new Event("RM_REC", FRAME_SIZE, Simulator.getTime());
                 eventAfterMMProcessing.setWaitPeriod(recTimeInterval);
             }
         } else {

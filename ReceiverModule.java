@@ -112,7 +112,6 @@ public class ReceiverModule {
                 for (int i = 1; i < framesToAccumulate; i++) {
                     Event waitingEvent = receiveBuffer.remove();
                     rbDelay += (Simulator.getTime() - waitingEvent.getRbTimeStamp());
-                    System.out.println("------------------"+rbDelay);
                     eventAfterRMRPPProcessing.addLinkedEvents(waitingEvent);
                 }                    
             }
