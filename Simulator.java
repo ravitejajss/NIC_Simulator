@@ -23,7 +23,7 @@ public class Simulator {
         ReceiverModule receiverModule = new ReceiverModule(rpp, 6000);
         
         int smTotalBufferCapacity = 512 * 1024;
-        int smPacketQueueCapacity = 256 * 1024;
+        int smPacketQueueCapacity = 0 * 1024;
         int smTransmitBufferCapacity = smTotalBufferCapacity - smPacketQueueCapacity;
         SendModule sendModule = new SendModule(spp, smPacketQueueCapacity, smTransmitBufferCapacity);
         

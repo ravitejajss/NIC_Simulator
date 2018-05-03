@@ -1,166 +1,236 @@
+
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.logging.FileHandler;
+import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
 
 public class SendModule {
-	
-	private final int FRAME_SIZE = 1526;
-	private final int FRAME_DATA_SIZE = 1500;
-	private Queue<Event> packetQueue;
-	private Queue<Event> transmitBuffer;
-	private SPP spp;
-	private int transBuffSize;
-	private int pktQSize;
-	private final Logger logger;
-	private FileHandler fileHandler;
+
+    private static final Logger logger = Logger.getLogger(SendModule.class.getName());
+    private static final int FRAME_SIZE = 1526;
+    private static final int FRAME_DATA_SIZE = 1500;
+    private static Handler fileHandler;
+
+    private TimeSource timeSource;
+    private FinisherModule finisherModule;
+    private SendPacketProcessor spp;
+    private int packetQueueCapacity;
+    private int transmitBufferCapacity;
+    
+    private Queue<Event> packetQueue;
+    private Queue<Event> transmitBuffer;
+    
+    // Variables to store stats
     private int totalMessages;
     private int totalFrames;
     private int droppedMessages;
     private long tbDelay;
     private long pqDelay;
     private long sppDelay;
-	
-	public SendModule(SPP spp, int transBuffSize, int pktQSize) throws SecurityException, IOException{
-		this.packetQueue = new LinkedList<Event>();
-		this.transmitBuffer = new LinkedList<Event>();
-		
-		this.spp = spp;
-		this.transBuffSize = transBuffSize;
-		this.pktQSize = pktQSize;
-		
-		this.fileHandler = new FileHandler("SM.log");
-		this.logger = Logger.getLogger(SendModule.class.getName());
-		SimpleFormatter formatter = new SimpleFormatter();            //Logging in Human readable format.
-		fileHandler.setFormatter(formatter);
-        logger.addHandler(fileHandler);
-		logger.setUseParentHandlers(false);
+
+    public SendModule(final TimeSource timeSource, final SendPacketProcessor spp, final FinisherModule finisherModule,
+            final int packetQueueCapacity, final int transmitBufferCapacity) 
+            throws SecurityException, IOException {
         
+        // Initialize SM parameters
+        this.timeSource = timeSource;
+        this.spp = spp;
+        this.finisherModule = finisherModule;
+        
+        //Initialize buffer capacities
+        this.packetQueueCapacity = packetQueueCapacity;
+        this.transmitBufferCapacity = transmitBufferCapacity;
+
+        // Initialize Packet Queue
+        packetQueue = new LinkedList<Event>();
+        
+        // Initialize Transmit Buffer
+        transmitBuffer = new LinkedList<Event>();
+        
+        // Initialize logger
+        fileHandler = new FileHandler("./SM-log");
+        logger.addHandler(fileHandler);
+        
+        //Initialing stats variables
         totalMessages = 0;
         totalFrames = 0;
         droppedMessages = 0;
         tbDelay = 0;
         pqDelay = 0;
         sppDelay = 0;
-	}
-	
-	public Event processPacket(Event event) {
-		if(event.getType().equals("SM_PQ")) {
-			return processSM_PQPacket(event);
-		}
-		else if (event.getType().equals("SM_SPPEnter")) {
-			return processSM_SPPEnterPacket(event);
-		}
-		else if (event.getType().equals("SM_SPPExit")){
-			logger.log(Level.INFO, "Message is being FINISHED in SM. " + event);
-			Simulator.finishEvent(event);
-			return null;
-		}
-		else {
-			logger.log(Level.WARNING, "Event wrongly sent to Send module discarding: " + event);
-			return null;
-		}
-	}
+    }
 
-	public Event processSM_PQPacket(Event event) {
-		logger.log(Level.INFO, "Message is being PROCESSED in SM. " + event);
-	    Event eventAfterSMProcessing = null;
-	    int messageSize = event.getMessageLength();
-	    totalMessages++; 
-	    if (spp.isBusy()) {
-	        if (messageSize <= pktQSize) {
-	            event.setPqTimeStamp(Simulator.getTime());
-	            packetQueue.add(event);
-	            pktQSize = pktQSize - event.getMessageLength();
-	        } else {
-	            droppedMessages++;
-	            logger.log(Level.INFO, "Message is DROPPED "
-	                    + "as Packet Queue does not have enough space. " + event);
-	        }
-	    } else {
-	        eventAfterSMProcessing = packetQueue.poll();
-	        if (eventAfterSMProcessing != null) {
-	            pqDelay += Simulator.getTime() - eventAfterSMProcessing.getPqTimeStamp();
-	            pktQSize = pktQSize + eventAfterSMProcessing.getMessageLength();
-	            if (messageSize <= pktQSize) {
-	                event.setPqTimeStamp(Simulator.getTime());
-	                packetQueue.add(event);
-	                pktQSize = pktQSize - messageSize;
-	                
-	            } else {
-	                droppedMessages++;
-	                logger.log(Level.INFO, "Message is DROPPED "
-	                        + "as Packet Queue does not have enough space. " + event);
-	            }
-	        } else {
-	            eventAfterSMProcessing = new Event(event);
-	        }
-	        spp.setBusy(true);
-	        eventAfterSMProcessing.setType("SM_SPPEnter");
-	        eventAfterSMProcessing.setWaitPeriod(spp.getTimeforProcessingMessage(eventAfterSMProcessing.getMessageLength()));
-	    }
-	    return eventAfterSMProcessing;
-	}
+    /*
+     * Sender Module events types
+     * 
+     */
+    public Event processEvent(Event event) {
+        if (event.getEventType().equals("SM_SEND")) {
+            return processSMSendEvent(event);
+        } else if (event.getEventType().equals("SM_VACATE_SPP")) {
+            return processSMVacateSPPEvent(event);
+        } else if (event.getEventType().equals("SM_FIN")) {
+            // collect metrics for the finished send event
+            logger.log(Level.INFO, "Message is being FINISHED in SM. " + event);
+            finisherModule.finishEvent(event);
+            return null;
+        } else {
+            // Wrong event sent to SM module, discarding the event
+            logger.log(Level.WARNING, "Event wrongly sent to Send module discarding: " + event);
+            return null;
+        }
+    }
 
-	public Event processSM_SPPEnterPacket(Event event) {
-		logger.log(Level.INFO, "Message is being VACATED from PP in SM. " + event);
-        event.setSppTimeStamp(Simulator.getTime());
+    /**
+     * This function processes the Messages generated by Poisson Distribution as event. 
+     * It follows steps given below:
+     * 1/ checks if the Packet Processor is busy, if yes, goes to step 2, else it creates a 
+     *    SM_VACATE event and returns it to be put into event list for later processing.
+     * 2/ checks if the Packet Queue has enough space to store the message, if it has then message
+     *    is stored in the queue else dropped.
+     * @param event
+     */
+    private Event processSMSendEvent(Event event) {
+        
+        logger.log(Level.INFO, "Message is being PROCESSED in SM. " + event);
+        Event eventAfterSMProcessing = null;
+        int messageSize = event.getMessageLength();
+        totalMessages++;
+
+        // Step1 testing if Packet Processor is Busy    
+        if (spp.isBusy()) {
+            // check if Queue has enough space to hold the incoming message.
+            if (messageSize <= packetQueueCapacity) {
+                // add it to queue and update the space in the queue.
+                event.setPqTimeStamp(timeSource.getTime());
+                packetQueue.add(event);
+                packetQueueCapacity = packetQueueCapacity - event.getMessageLength();
+            } else {
+                droppedMessages++;
+                logger.log(Level.INFO, "Message is DROPPED "
+                        + "as Packet Queue does not have enough space. " + event);
+            }
+        } else {
+            // Add this message to the Queue and process the first message in the queue.
+            eventAfterSMProcessing = packetQueue.poll(); // gets the first message from the queue.
+            if (eventAfterSMProcessing != null) {
+                // Add the delay in PQ
+                pqDelay += timeSource.getTime() - eventAfterSMProcessing.getPqTimeStamp();
+                packetQueueCapacity = packetQueueCapacity + eventAfterSMProcessing.getMessageLength();
+                // check the size of the PQ for safety, usually PQ should have enough space
+                if (messageSize <= packetQueueCapacity) {
+                    // add it to queue and update the space in the queue.
+                    event.setPqTimeStamp(timeSource.getTime());
+                    packetQueue.add(event);
+                    packetQueueCapacity = packetQueueCapacity - messageSize;
+                    
+                } else {
+                    droppedMessages++;
+                    logger.log(Level.INFO, "Message is DROPPED "
+                            + "as Packet Queue does not have enough space. " + event);
+                }
+            } else {
+                eventAfterSMProcessing = new Event(event);
+            }
+            spp.setBusy(true);
+            eventAfterSMProcessing.setEventType("SM_VACATE_SPP");
+            eventAfterSMProcessing.setWaitPeriod(spp.getTimeforProcessingMessage(eventAfterSMProcessing.getMessageLength()));
+        }
+
+        return eventAfterSMProcessing;
+    }
+
+    /** This function handles SM_VACATE_SPP event. It attaches the input event to SPP and then calls 
+     *  checkBusyWaitingSPP(), which does further processing of the event.
+     */
+    private Event processSMVacateSPPEvent(Event event) {
+        logger.log(Level.INFO, "Message is being VACATED from PP in SM. " + event);
+        event.setSppTimeStamp(timeSource.getTime());
         spp.setCurrentEvent(event);
-        Event eventAfterSPPProcessing = ProtocolProcessing();
+        Event eventAfterSPPProcessing = checkBusyWaitingSPP();
         return  eventAfterSPPProcessing;
-	}
-	
+    }
+
+    /**
+     * This method is called from MAC module when it is in send mode. Here we check if there are frames in TB
+     * if there is one we remove it from TB and send to MAC module and Busy waiting PP is checked by calling 
+     * checkBusyWaitingSPP() from main method.
+     * 
+     */
     public Event processFrames() {
-    	Event eventToMM = null;
+        
+        Event eventToMM = null;
         if (!transmitBuffer.isEmpty()) {
+            // update the number of Frames processed
             totalFrames++;
             eventToMM = transmitBuffer.remove();
-            transBuffSize = transBuffSize + FRAME_SIZE;
-            tbDelay += Simulator.getTime() - eventToMM.getTbTimeStamp();
+            transmitBufferCapacity = transmitBufferCapacity + FRAME_SIZE;
+            // Add delay in TB
+            tbDelay += timeSource.getTime() - eventToMM.getTbTimeStamp();
         }
         return eventToMM;
     }
     
-    public Event ProtocolProcessing() {
-    	Event eventAfterBusyWaitingProcessing = null;
+    /**
+     * This function does the processing of moving a packet from PP to TB. It uses following steps to do so.
+     * 1/ Checks if the TB can store the Frames obtained from the in coming message, if it does go to step 3,
+     *    else step 2
+     * 2/ Puts as many frames as it can into TB and SPP keeps busy waiting for the TB to become free.
+     * 3/ Puts the frames into TB and marks SPP as free and which later checks if there are messages in PQ if there are
+     *    it processes them.
+     */
+    public Event checkBusyWaitingSPP() {
+        Event eventAfterBusyWaitingProcessing = null;
+        
         if (spp.isBusy() && spp.getCurrentEvent() != null) {
-        	Event event = spp.getCurrentEvent();
+
+            Event event = spp.getCurrentEvent();
             int messageSize = event.getMessageLength();
             int totalFramesInMessage = (int) Math.ceil(messageSize * 1.0 / FRAME_DATA_SIZE);
-            for (int i = 1; i <= totalFramesInMessage && FRAME_SIZE <= transBuffSize; i++) {
+            // Try adding as many Frames as you can to Transmit Buffer
+            for (int i = 1; i <= totalFramesInMessage && FRAME_SIZE <= transmitBufferCapacity; i++) {
+                
                 Event tb = new Event("SM_TB", FRAME_SIZE, event.getArrivalTimeStamp());
                 tb.setTotalMessageLength(event.getTotalMessageLength());
+                // if this is the last event set isLastFrame flag
                 if (i == totalFramesInMessage) {
                     tb.setIsLastSendFrame(true);
-                    sppDelay += Simulator.getTime() - event.getSppTimeStamp();
+                    sppDelay += timeSource.getTime() - event.getSppTimeStamp();
                 }
-                tb.setTbTimeStamp(Simulator.getTime());
+                tb.setTbTimeStamp(timeSource.getTime());
                 transmitBuffer.add(tb);
-                transBuffSize = transBuffSize - FRAME_SIZE;
+                //Update event size and transmitBufferCapacity
+                transmitBufferCapacity = transmitBufferCapacity - FRAME_SIZE;
                 messageSize = Math.max((messageSize - FRAME_DATA_SIZE), 0);
                 event.setMessageLength(messageSize);
             }
             
+            // checking to see if all the message is converted to frames, if the message is converted to frame
+            // message length in then event should be zero. Set the SPP current event to null.
             if (event.getMessageLength() <= 0) {
                 spp.setCurrentEvent(null);
                 spp.setBusy(false);
+                // if the message is converted into Frames, check PQ is it have any more events to handle
                 if (!packetQueue.isEmpty()) {
                    spp.setBusy(true);
                    eventAfterBusyWaitingProcessing = new Event(packetQueue.remove());
-                   eventAfterBusyWaitingProcessing.setType("SM_SPPEnter");
+                   eventAfterBusyWaitingProcessing.setEventType("SM_VACATE_SPP");
                    long waitTime = spp.getTimeforProcessingMessage(eventAfterBusyWaitingProcessing.getMessageLength());
-                   eventAfterBusyWaitingProcessing.setWaitPeriod(Simulator.getTime() - eventAfterBusyWaitingProcessing.getArrivalTimeStamp() + waitTime);
-                   pqDelay += Simulator.getTime() - eventAfterBusyWaitingProcessing.getPqTimeStamp();
+                   eventAfterBusyWaitingProcessing.setWaitPeriod(timeSource.getTime() - eventAfterBusyWaitingProcessing.getArrivalTimeStamp() + waitTime);
+                   pqDelay += timeSource.getTime() - eventAfterBusyWaitingProcessing.getPqTimeStamp();
                 }                
             } else {
+                // case when a message is not completely converted into frames.
+                // set the spp to busy and update the current event in spp.
                 spp.setBusy(true);
                 spp.setCurrentEvent(event);
             }
         }
-		return eventAfterBusyWaitingProcessing;
+        
+        return eventAfterBusyWaitingProcessing;
     }
     
     public int getDroppedMessages() {
@@ -177,3 +247,4 @@ public class SendModule {
                 + "Average delay in TB: " + (tbDelay * 1.0) / totalFrames;
     }
 }
+

@@ -8,12 +8,24 @@ public class Event {
     private long arrivalTimeStamp;
     private int messageLength;
     private long waitPeriod;
+    // this is the start time for the event in Receive Buffer.
     private long rbTimeStamp;
+    
+    // this is the start time for the event in packet queue.
     private long pqTimeStamp;
+    
+    // this is the start time for the event in transmit buffer.
     private long tbTimeStamp;
+    
+    // this is the start time for busy waiting in SPP
     private long sppTimeStamp;
+    
+    //is true when it is a last from of the send message
     private boolean isLastSendFrame;
+    
+    //carry total number of bits in a message
     private int totalMessageLength;
+    
     private List<Event> linkedEvents;
     
     public Event(String eventType, int messageLength, long arrivalTimeStamp) {
@@ -24,7 +36,7 @@ public class Event {
     }
     
     public Event(Event event) {
-        this.eventType = event.getType();
+        this.eventType = event.getEventType();
         this.arrivalTimeStamp = event.getArrivalTimeStamp();
         this.messageLength = event.getMessageLength();
         this.waitPeriod = event.getWaitPeriod();
@@ -37,6 +49,7 @@ public class Event {
         this.linkedEvents = new ArrayList<Event>(event.getLinkedEvents());
     }
 
+    // getter and setter methods
     public long getArrivalTimeStamp() {
         return arrivalTimeStamp;
     }
@@ -53,11 +66,11 @@ public class Event {
         this.messageLength = messageLength;
     }
 
-    public String getType() {
+    public String getEventType() {
         return eventType;
     }
 
-    public void setType(String eventType) {
+    public void setEventType(String eventType) {
         this.eventType = eventType;
     }
     
