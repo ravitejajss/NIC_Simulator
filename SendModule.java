@@ -76,7 +76,7 @@ public class SendModule {
         } else if (event.getEventType().equals("SM_FIN")) {
             // collect metrics for the finished send event
             logger.log(Level.INFO, "Message is being FINISHED in SM. " + event);
-            NICSimulator.finishEvent(event);
+            Simulator.finishEvent(event);
             return null;
         } else {
             // Wrong event sent to SM module, discarding the event
@@ -106,7 +106,7 @@ public class SendModule {
             // check if Queue has enough space to hold the incoming message.
             if (messageSize <= packetQueueCapacity) {
                 // add it to queue and update the space in the queue.
-                event.setPqTimeStamp(NICSimulator.getTime());
+                event.setPqTimeStamp(Simulator.getTime());
                 packetQueue.add(event);
                 packetQueueCapacity = packetQueueCapacity - event.getMessageLength();
             } else {
@@ -119,12 +119,12 @@ public class SendModule {
             eventAfterSMProcessing = packetQueue.poll(); // gets the first message from the queue.
             if (eventAfterSMProcessing != null) {
                 // Add the delay in PQ
-                pqDelay += NICSimulator.getTime() - eventAfterSMProcessing.getPqTimeStamp();
+                pqDelay += Simulator.getTime() - eventAfterSMProcessing.getPqTimeStamp();
                 packetQueueCapacity = packetQueueCapacity + eventAfterSMProcessing.getMessageLength();
                 // check the size of the PQ for safety, usually PQ should have enough space
                 if (messageSize <= packetQueueCapacity) {
                     // add it to queue and update the space in the queue.
-                    event.setPqTimeStamp(NICSimulator.getTime());
+                    event.setPqTimeStamp(Simulator.getTime());
                     packetQueue.add(event);
                     packetQueueCapacity = packetQueueCapacity - messageSize;
                     
@@ -149,7 +149,7 @@ public class SendModule {
      */
     private Event processSMVacateSPPEvent(Event event) {
         logger.log(Level.INFO, "Message is being VACATED from PP in SM. " + event);
-        event.setSppTimeStamp(NICSimulator.getTime());
+        event.setSppTimeStamp(Simulator.getTime());
         setCurrentEvent(event);
         Event eventAfterSPPProcessing = checkBusyWaitingSPP();
         return  eventAfterSPPProcessing;
@@ -170,7 +170,7 @@ public class SendModule {
             eventToMM = transmitBuffer.remove();
             transmitBufferCapacity = transmitBufferCapacity + FRAME_SIZE;
             // Add delay in TB
-            tbDelay += NICSimulator.getTime() - eventToMM.getTbTimeStamp();
+            tbDelay += Simulator.getTime() - eventToMM.getTbTimeStamp();
         }
         return eventToMM;
     }
@@ -227,9 +227,9 @@ public class SendModule {
                 // if this is the last event set isLastFrame flag
                 if (i == totalFramesInMessage) {
                     tb.setIsLastSendFrame(true);
-                    sppDelay += NICSimulator.getTime() - event.getSppTimeStamp();
+                    sppDelay += Simulator.getTime() - event.getSppTimeStamp();
                 }
-                tb.setTbTimeStamp(NICSimulator.getTime());
+                tb.setTbTimeStamp(Simulator.getTime());
                 transmitBuffer.add(tb);
                 //Update event size and transmitBufferCapacity
                 transmitBufferCapacity = transmitBufferCapacity - FRAME_SIZE;
@@ -248,8 +248,8 @@ public class SendModule {
                    eventAfterBusyWaitingProcessing = new Event(packetQueue.remove());
                    eventAfterBusyWaitingProcessing.setEventType("SM_VACATE_SPP");
                    long waitTime = getTimeforProcessingMessage(eventAfterBusyWaitingProcessing.getMessageLength());
-                   eventAfterBusyWaitingProcessing.setWaitPeriod(NICSimulator.getTime() - eventAfterBusyWaitingProcessing.getArrivalTimeStamp() + waitTime);
-                   pqDelay += NICSimulator.getTime() - eventAfterBusyWaitingProcessing.getPqTimeStamp();
+                   eventAfterBusyWaitingProcessing.setWaitPeriod(Simulator.getTime() - eventAfterBusyWaitingProcessing.getArrivalTimeStamp() + waitTime);
+                   pqDelay += Simulator.getTime() - eventAfterBusyWaitingProcessing.getPqTimeStamp();
                 }                
             } else {
                 // case when a message is not completely converted into frames.

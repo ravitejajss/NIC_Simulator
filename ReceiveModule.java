@@ -8,9 +8,9 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class ReceiverModule {
+public class ReceiveModule {
     
-    private static final Logger logger = Logger.getLogger(ReceiverModule.class.getName());
+    private static final Logger logger = Logger.getLogger(ReceiveModule.class.getName());
     private static final int FRAME_SIZE = 1500;
     private static Handler fileHandler;
 
@@ -28,7 +28,7 @@ public class ReceiverModule {
     private int rbDelay;
 
     
-    public ReceiverModule(final int receiveBufferSize, boolean isBusy, float processingRate) throws SecurityException, IOException {
+    public ReceiveModule(final int receiveBufferSize, boolean isBusy, float processingRate) throws SecurityException, IOException {
         // set the max number of frames in ReceiveBuffer
         maxFramesInRB = receiveBufferSize / FRAME_SIZE;
         
@@ -93,7 +93,7 @@ public class ReceiverModule {
                 logger.log(Level.INFO, "Frame from MM is DROPPED "
                         + "as Receive Buffer is full. " + event);
             } else {
-                event.setRbTimeStamp(NICSimulator.getTime());
+                event.setRbTimeStamp(Simulator.getTime());
                 receiveBuffer.add(event);
             }                
         } else {
@@ -103,18 +103,18 @@ public class ReceiverModule {
             }
             
             int framesToAccumulate = getFramesToAccumulate();
-            event.setRbTimeStamp(NICSimulator.getTime());
+            event.setRbTimeStamp(Simulator.getTime());
             receiveBuffer.add(event);
             if (framesToAccumulate <= receiveBuffer.size()) {
                 setBusy(true);
                 eventAfterRMProcessing = new Event(receiveBuffer.remove());                    
                 eventAfterRMProcessing.setEventType("RM_VACATE");
-                rbDelay += (NICSimulator.getTime() - eventAfterRMProcessing.getRbTimeStamp());
+                rbDelay += (Simulator.getTime() - eventAfterRMProcessing.getRbTimeStamp());
                 long firstFrameTimeStamp = eventAfterRMProcessing.getArrivalTimeStamp();
                 long lastFrameTimeStamp = firstFrameTimeStamp;
                 for (int i = 1; i < framesToAccumulate; i++) {
                     Event waitingEvent = receiveBuffer.remove();
-                    rbDelay += (NICSimulator.getTime() - waitingEvent.getRbTimeStamp());
+                    rbDelay += (Simulator.getTime() - waitingEvent.getRbTimeStamp());
                     eventAfterRMProcessing.addLinkedEvents(waitingEvent);
                     if ((i + 1) == framesToAccumulate) {
                         lastFrameTimeStamp = waitingEvent.getArrivalTimeStamp();
@@ -141,7 +141,7 @@ public class ReceiverModule {
         
         // calculates all the Delays and other stats for the event and it's linked ones.
         logger.log(Level.INFO, "Frame is vacated from RM. " + event);
-        NICSimulator.finishEvent(event);
+        Simulator.finishEvent(event);
         setBusy(false);
 
         if (receiveBuffer.isEmpty()) {
@@ -152,12 +152,12 @@ public class ReceiverModule {
             if (framesToAccumulate <= receiveBuffer.size()) {
                 setBusy(true);
                 eventAfterRMRPPProcessing = new Event(receiveBuffer.remove());
-                rbDelay += (NICSimulator.getTime() - eventAfterRMRPPProcessing.getRbTimeStamp());
+                rbDelay += (Simulator.getTime() - eventAfterRMRPPProcessing.getRbTimeStamp());
                 eventAfterRMRPPProcessing.setEventType("RM_VACATE");
                 eventAfterRMRPPProcessing.setWaitPeriod(getTimeForProcessingFrames(FRAME_SIZE));
                 for (int i = 1; i < framesToAccumulate; i++) {
                     Event waitingEvent = receiveBuffer.remove();
-                    rbDelay += (NICSimulator.getTime() - waitingEvent.getRbTimeStamp());
+                    rbDelay += (Simulator.getTime() - waitingEvent.getRbTimeStamp());
                     eventAfterRMRPPProcessing.addLinkedEvents(waitingEvent);
                 }                    
             }

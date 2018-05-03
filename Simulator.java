@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
 
-public class NICSimulator {
+public class Simulator {
     
     public static final int FRAME_SIZE = 1526;
     private static long maxEventTime = 0l;
@@ -20,7 +20,7 @@ public class NICSimulator {
     
     public static void main(String args[]) throws SecurityException, IOException {
         // initialize all the needed objects.
-        ReceiverModule rm = new ReceiverModule(6000, false, 5);
+        ReceiveModule rm = new ReceiveModule(6000, false, 5);
         
         // Set Buffer capacity values for send module.
         int smTotalBufferCapacity = 512 * 1024;
