@@ -62,7 +62,7 @@ public class MacModule {
                 if (e.isLastSendFrame()) {
                     // create a new event if the frame is the last event in the message and return 
                     eventAfterMMProcessing = new Event(e);
-                    eventAfterMMProcessing.setEventType("SM_FIN");
+                    eventAfterMMProcessing.setEventType("SM_SPPExit");
                     eventAfterMMProcessing.setWaitPeriod(Simulator.getTime() - eventAfterMMProcessing.getArrivalTimeStamp() + sendTimeInterval);
                 } 
             }

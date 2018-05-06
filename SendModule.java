@@ -69,11 +69,11 @@ public class SendModule {
      * 
      */
     public Event processEvent(Event event) {
-        if (event.getEventType().equals("SM_SEND")) {
+        if (event.getEventType().equals("SM_PQ")) {
             return processSMSendEvent(event);
-        } else if (event.getEventType().equals("SM_VACATE_SPP")) {
+        } else if (event.getEventType().equals("SM_SPPEnter")) {
             return processSMVacateSPPEvent(event);
-        } else if (event.getEventType().equals("SM_FIN")) {
+        } else if (event.getEventType().equals("SM_SPPExit")) {
             // collect metrics for the finished send event
             logger.log(Level.INFO, "Message is being FINISHED in SM. " + event);
             Simulator.finishEvent(event);
@@ -111,6 +111,7 @@ public class SendModule {
                 packetQueueCapacity = packetQueueCapacity - event.getMessageLength();
             } else {
                 droppedMessages++;
+                Simulator.dm++;
                 logger.log(Level.INFO, "Message is DROPPED "
                         + "as Packet Queue does not have enough space. " + event);
             }
@@ -130,6 +131,7 @@ public class SendModule {
                     
                 } else {
                     droppedMessages++;
+                    Simulator.dm++;
                     logger.log(Level.INFO, "Message is DROPPED "
                             + "as Packet Queue does not have enough space. " + event);
                 }
@@ -137,14 +139,14 @@ public class SendModule {
                 eventAfterSMProcessing = new Event(event);
             }
             setBusy(true);
-            eventAfterSMProcessing.setEventType("SM_VACATE_SPP");
+            eventAfterSMProcessing.setEventType("SM_SPPEnter");
             eventAfterSMProcessing.setWaitPeriod(getTimeforProcessingMessage(eventAfterSMProcessing.getMessageLength()));
         }
 
         return eventAfterSMProcessing;
     }
 
-    /** This function handles SM_VACATE_SPP event. It attaches the input event to SPP and then calls 
+    /** This function handles SM_SPPEnter event. It attaches the input event to SPP and then calls 
      *  checkBusyWaitingSPP(), which does further processing of the event.
      */
     private Event processSMVacateSPPEvent(Event event) {
@@ -246,7 +248,7 @@ public class SendModule {
                 if (!packetQueue.isEmpty()) {
                    setBusy(true);
                    eventAfterBusyWaitingProcessing = new Event(packetQueue.remove());
-                   eventAfterBusyWaitingProcessing.setEventType("SM_VACATE_SPP");
+                   eventAfterBusyWaitingProcessing.setEventType("SM_SPPEnter");
                    long waitTime = getTimeforProcessingMessage(eventAfterBusyWaitingProcessing.getMessageLength());
                    eventAfterBusyWaitingProcessing.setWaitPeriod(Simulator.getTime() - eventAfterBusyWaitingProcessing.getArrivalTimeStamp() + waitTime);
                    pqDelay += Simulator.getTime() - eventAfterBusyWaitingProcessing.getPqTimeStamp();
@@ -270,6 +272,7 @@ public class SendModule {
         return "Send Module Stats: \n"
                 + "Total number of Messages processed by SM: " + totalMessages + "\n"
                 + "Total number of Messages dropped by SM: " + droppedMessages + "\n"
+                + "Total percentage of Messages dropped by SM (%): " + (1.0*droppedMessages/totalMessages)*100 + "\n"
                 + "Total number of Frames in SM: " + totalFrames + "\n"
                 + "Average delay in PQ: " + (pqDelay * 1.0) / totalMessages + "\n"
                 + "Average delay in SPP: " + (sppDelay * 1.0) / totalMessages + "\n"

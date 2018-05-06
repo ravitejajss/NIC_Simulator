@@ -49,14 +49,7 @@ public class ReceiveModule {
         droppedFrames = 0;
         rbDelay = 0;
     }
-    
-    /*
-     * Receive Module events: RM_REC and RM_VACATE
-     * 
-     * Also we update the number of events processed by RM only if the event is of type RM_REC.
-     * If event is of type RM_VACATE we would have already accounted the event previosuly when
-     * it entered RM as RM_REC event. 
-     */
+
     public Event processEvent(Event event) {
         if (event.getEventType().equals("RM_REC")) {
             return processRMRecEvent(event);
@@ -69,17 +62,6 @@ public class ReceiveModule {
         }
     }
     
-    /**
-     * This function processes the frames sent by MM as event. It follows steps given below:
-     * 1/ Checks RPP if it is busy, if yes RM might store the frame in RB or drop it,
-     *    if not goes to step 2 
-     * 2/ If RPP is not busy it checks if RPP is waiting for accumulating packets in RB, if yes
-     *    RPP checks if it has enough frames to process and processes them else waits further, if not 
-     *    goes to step 3
-     * 3/ RRP generates random number of packets it has to accumulate and does the process accordingly.
-     * 
-     * @param event
-     */
     private Event processRMRecEvent(Event event) {
         totalFramesProcessed++;
         Event eventAfterRMProcessing = null;
@@ -90,6 +72,7 @@ public class ReceiveModule {
             // check if RB can store more Frames.
             if (receiveBuffer.size() >= maxFramesInRB) {
                 droppedFrames++;
+                Simulator.dm++;
                 logger.log(Level.INFO, "Frame from MM is DROPPED "
                         + "as Receive Buffer is full. " + event);
             } else {
@@ -126,18 +109,9 @@ public class ReceiveModule {
         
         return eventAfterRMProcessing;        
     }
-    
-    /**
-     * This function handles a vacate event from RM module. It calls finishEvent to collect stats
-     * about it and then later checks if there are any events that are waiting in RB, if they are 
-     * we generate random Frames to accumulate and check if RB has required number of Frames if yes
-     * we create a RM_VACATE event and return it. Else we just return null waiting for more frames.
-     *  
-     * @param event
-     * @return
-     */
+
     private Event processRMVacateEvent(Event event) {
-        Event eventAfterRMRPPProcessing = null;
+        Event eventAfterProcessing = null;
         
         // calculates all the Delays and other stats for the event and it's linked ones.
         logger.log(Level.INFO, "Frame is vacated from RM. " + event);
@@ -151,18 +125,18 @@ public class ReceiveModule {
             int framesToAccumulate = getFramesToAccumulate();
             if (framesToAccumulate <= receiveBuffer.size()) {
                 setBusy(true);
-                eventAfterRMRPPProcessing = new Event(receiveBuffer.remove());
-                rbDelay += (Simulator.getTime() - eventAfterRMRPPProcessing.getRbTimeStamp());
-                eventAfterRMRPPProcessing.setEventType("RM_VACATE");
-                eventAfterRMRPPProcessing.setWaitPeriod(getTimeForProcessingFrames(FRAME_SIZE));
+                eventAfterProcessing = new Event(receiveBuffer.remove());
+                rbDelay += (Simulator.getTime() - eventAfterProcessing.getRbTimeStamp());
+                eventAfterProcessing.setEventType("RM_VACATE");
+                eventAfterProcessing.setWaitPeriod(getTimeForProcessingFrames(FRAME_SIZE));
                 for (int i = 1; i < framesToAccumulate; i++) {
                     Event waitingEvent = receiveBuffer.remove();
                     rbDelay += (Simulator.getTime() - waitingEvent.getRbTimeStamp());
-                    eventAfterRMRPPProcessing.addLinkedEvents(waitingEvent);
+                    eventAfterProcessing.addLinkedEvents(waitingEvent);
                 }                    
             }
         }
-        return eventAfterRMRPPProcessing;     
+        return eventAfterProcessing;     
     }
     
     public int getDroppedFrames() {
@@ -206,15 +180,11 @@ public class ReceiveModule {
         return (long)((processingRate * framesToAccumulate * frameSize * 8) / 1000);
     }
     
-    /**
-     * Returns the stats of RM so far.
-     * 
-     * @return
-     */
     public String getRMStats() {
         return "Receive Module Stats: \n"
                 + "Total number of Frames processed by RM: " + totalFramesProcessed + "\n"
                 + "Total number of Frames dropped by RM: " + droppedFrames + "\n"
+                        + "Total percentage of Messages dropped by SM (%): " + (1.0*droppedFrames/totalFramesProcessed)*100 + "\n"
                 + "Total wait time in RB: " + rbDelay + "\n"
                 + "Average wait time in RB: " + (rbDelay * 1.0) / (totalFramesProcessed - droppedFrames);
     }

@@ -17,27 +17,28 @@ public class Simulator {
     private static long rmEventDelay;
     private static long rmBytes;
     private static long smBytes;
+	public static int dm;
     
     public static void main(String args[]) throws SecurityException, IOException {
         // initialize all the needed objects.
         ReceiveModule rm = new ReceiveModule(6000, false, 5);
         
         // Set Buffer capacity values for send module.
-        int smTotalBufferCapacity = 512 * 1024;
-        int smPacketQueueCapacity = 512 * 1024;
-        int smTransmitBufferCapacity = smTotalBufferCapacity - smPacketQueueCapacity;
-        SendModule sm = new SendModule(smPacketQueueCapacity, smTransmitBufferCapacity, false, 2);
+        int smTotalBufferSIze = 512 * 1024;
+        int smPQSize = 190 * 1024;
+        int smTBSize = smTotalBufferSIze - smPQSize;
+        SendModule sm = new SendModule(smPQSize, smTBSize, false, 2);
         
-        double destinationProbability = 0.5; // Ps
-        int meanMessageLength = 16;
+        double destProbability = 0.5; // Ps
+        int meanMsgLen = 32;
         int possionMean = 100;
-        double isReceiveModeProb = 0.5;
+        double recModeProb = 0.5;
         long mmTimeInterval = 16l; // calculated using the bandwidth and the processing speed of the MAC
         
         //converging
         long convergance = 50;
         
-        MacModule mm = new MacModule(sm, destinationProbability, mmTimeInterval, mmTimeInterval);
+        MacModule mm = new MacModule(sm, destProbability, mmTimeInterval, mmTimeInterval);
         long oldAvgMetric = 0;
         boolean run = true;
         
@@ -47,15 +48,16 @@ public class Simulator {
 
             PriorityQueue<QueueEvents> eventsList = new PriorityQueue<QueueEvents>();
             // Call the method to add send events.
-            getPossionEvents(eventsList, possionMean, meanMessageLength);
+            getPossionEvents(eventsList, possionMean, meanMsgLen);
             // Call the method to add Mac events.
-            getMacReceiveEvents(eventsList, isReceiveModeProb, mmTimeInterval);            
+            getMacReceiveEvents(eventsList, recModeProb, mmTimeInterval);            
             
             while (!eventsList.isEmpty()) {
                 QueueEvents queueEvents = eventsList.poll();
                 currentProcessingEvents = queueEvents.getEventsAtThisTime();
                 setTime(queueEvents.getTime());
-                System.out.println("Event processed time: " + getTime());
+                System.out.println("Time: " + getTime());
+                dm = 0;
                 for (Event event : currentProcessingEvents) {
                     Event returnedEvent;
                     if (event.getEventType().startsWith("RM_")) {
@@ -83,9 +85,8 @@ public class Simulator {
                     } else {
                         System.out.println("Wrong event: " + event);
                     }
-                }
+                }   
             }
-
             long newAvgMetric = getAverageDelay();
             run = (Math.abs(newAvgMetric - oldAvgMetric) > convergance);
             oldAvgMetric = newAvgMetric;
@@ -166,6 +167,10 @@ public class Simulator {
         }
     } 
     
+    public static int getTotalDroppedMessages(SendModule sm, ReceiveModule rm) {
+    	return sm.getDroppedMessages()+rm.getDroppedFrames();
+    }
+    
     public static long getAverageDelay() {
         if (rmEvents == 0 && smEvents == 0) {
             return 0;
@@ -174,11 +179,19 @@ public class Simulator {
         }
     }
     
-    public static double getThroughPut() {
-        if (rmEvents == 0 && smEvents == 0) {
+    public static double getSppThroughPut() {
+        if ( smEvents == 0) {
             return 0;
         } else {
-            return (smBytes + rmBytes)  / (smEventDelay + rmEventDelay);
+            return (smBytes )  / (smEventDelay );
+        }
+    }
+    
+    public static double getRppThroughPut() {
+        if (rmEvents == 0 ) {
+            return 0;
+        } else {
+            return ( rmBytes)  / ( rmEventDelay);
         }
     }
     
@@ -190,7 +203,8 @@ public class Simulator {
                 + "Total wait time in RB: " + rmEventDelay + "\n"
                 + "Average Receive events Delay: " + getAverageReceiveDelay() + "\n"
                 + "Total Average events Delay: " + getAverageDelay() + "\n"
-                + "Average Throughput: " + getThroughPut();        
+                + "Average Throughput SM: " + getSppThroughPut() + "\n"
+        		+ "Average Throughput RM: " + getRppThroughPut();
     }
     
     private static void addEvent(PriorityQueue<QueueEvents> eventsList, Event event) {
@@ -222,13 +236,13 @@ public class Simulator {
     private static void getPossionEvents(PriorityQueue<QueueEvents> eventsList, 
             int possionMean, int messageLengthMean){
         long nextArrival = getTime();
-        for(int i = 0; i < 200 ; i++){
+        for(int i = 0; i < 500 ; i++){
             long interArrival   = (long)StdRandom.poisson(possionMean);
             nextArrival = nextArrival + interArrival;
             int messageLength =  (int) StdRandom.exp(1.0 / (messageLengthMean * 1024));
             // clamp the message length to 64KB
             messageLength = Math.min(messageLength, (64 * 1024)); 
-            Event e = new Event("SM_SEND", messageLength, nextArrival);
+            Event e = new Event("SM_PQ", messageLength, nextArrival);
             e.setTotalMessageLength(messageLength);
             addEvent(eventsList, e);
         } 
